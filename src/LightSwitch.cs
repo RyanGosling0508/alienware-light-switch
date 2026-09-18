@@ -10,8 +10,8 @@ using System.Threading;
 using System.Windows.Forms;
 [assembly: AssemblyTitle("Alienware Light Switch")]
 [assembly: AssemblyDescription("A small companion for AWCC lighting")]
-[assembly: AssemblyVersion("1.0.1.0")]
-[assembly: AssemblyFileVersion("1.0.1.0")]
+[assembly: AssemblyVersion("1.0.2.0")]
+[assembly: AssemblyFileVersion("1.0.2.0")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 RyanGosling0508")]
 namespace LightSwitch {
  static class Palette {
@@ -89,11 +89,11 @@ namespace LightSwitch {
    using(var b=new SolidBrush(dot))g.FillEllipse(b,34,400,7,7);
    Draw(g,status,new Font("Segoe UI",12,FontStyle.Regular,GraphicsUnit.Pixel),Palette.Text,51,393);
    Draw(g,"LOCAL CONTROL  /  NO BACKGROUND SERVICE",new Font("Segoe UI",11,FontStyle.Regular,GraphicsUnit.Pixel),Palette.Muted,32,454);
-   Draw(g,"v1.0.1",new Font("Segoe UI",11,FontStyle.Regular,GraphicsUnit.Pixel),Palette.Muted,578,454);
+   Draw(g,"v1.0.2",new Font("Segoe UI",11,FontStyle.Regular,GraphicsUnit.Pixel),Palette.Muted,578,454);
   }
   static void Draw(Graphics g,string text,Font f,Color color,float x,float y){using(f)using(var b=new SolidBrush(color))g.DrawString(text,f,b,x,y);}
   void Apply(string mode){
-   if(busy)return;busy=true;failed=false;on.Enabled=off.Enabled=false;status="Connecting to Alienware Command Center...";subtitle="AWCC minimizes automatically when finished.";Invalidate();
+   if(busy)return;busy=true;failed=false;on.Enabled=off.Enabled=false;status="Connecting to Alienware Command Center...";subtitle="Your existing AWCC window stays yours.";Invalidate();
    ThreadPool.QueueUserWorkItem(_=>{var result=Backend.Run(mode);if(IsDisposed)return;BeginInvoke((Action)(()=>{
     busy=false;failed=!result.Success;on.Enabled=off.Enabled=true;lastDetails=result.Details;
     if(result.Success){current=mode;on.Selected=mode=="On";off.Selected=mode=="Off";status=mode=="On"?"Lights on. AWCC selection verified.":"Lights off. AWCC selection verified.";subtitle=mode=="On"?"Your current effects are back.":"A little less glow. Everything else stays yours.";}

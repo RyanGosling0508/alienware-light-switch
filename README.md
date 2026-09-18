@@ -10,7 +10,7 @@ Download **AlienwareLightSwitch.exe** from the [latest release](https://github.c
 
 1. Open the executable.
 2. Choose **Lights on** or **Lights off**.
-3. Wait for the status message. AWCC may briefly open and take time to load; after a successful lighting change it is automatically minimized. If the lighting change fails, the app leaves AWCC available for troubleshooting.
+3. Wait for the status message. If AWCC is not running, the app requests a minimized launch, switches the lighting, then normally closes only that instance. An AWCC splash screen may still appear briefly. Your already-running AWCC window is not restored, minimized, or closed by the tool.
 
 **Lights on** selects AWCC's **Go Light**, restoring your configured effects. **Lights off** selects **Go Dark**. The app does not change your fan profile or Windows power plan. Avoid interacting with AWCC while an operation is in progress.
 
@@ -35,7 +35,7 @@ The executable embeds a small PowerShell script as an assembly resource. It runs
 
 `AWCC > Library > System Default > Go Light / Go Dark`
 
-It reads back the selected AWCC radio button before reporting completion. There are no external script files to copy, and no direct USB writes, firmware edits, driver installation, or attempts to stop Dell services. The helper exits after each operation. AWCC remains running but is minimized after success; it is restored as needed for the next change. This does not eliminate AWCC or guarantee that its window will never appear briefly.
+It reads back the selected AWCC radio button before reporting completion. There are no external script files to copy, and no direct USB writes, firmware edits, driver installation, or attempts to stop Dell services. The helper exits after each operation. A pre-existing AWCC process is never treated as owned by this app. For a process started by the tool, normal window closure is requested only after successful verification and after checking its process ID, start time, and executable path. If foreground activity indicates that you took over the AWCC window, automatic closure is skipped. No force termination or service changes are used. On errors, AWCC is left available for troubleshooting. This is best-effort window management, not a guarantee that AWCC will never show a splash screen or briefly activate itself. The tool still navigates AWCC lighting pages to perform the requested change.
 
 An AWCC selection readback is **software confirmation**, not optical proof that every physical LED changed. Physical keyboard and chassis behavior has been confirmed on the tested machine; other configurations need their own verification.
 
@@ -58,7 +58,8 @@ The release executable is not code-signed. Release assets include a SHA-256 chec
 - Compiled the embedded-script executable successfully.
 - Tested both visible buttons from a directory containing only the executable.
 - Verified AWCC selection after off/on actions.
-- Tested AWCC startup when it was initially closed in the preceding launcher integration.
+- Tested minimized AWCC startup, successful lighting changes, normal closure, and absence of an AWCC UI process afterward.
+- Tested pre-existing normal and minimized AWCC windows: both retained their original window state and remained running.
 - Checked the UI layout at the test machine's 150% display scaling.
 - Physical off/on behavior was confirmed on the tested AA18250.
 

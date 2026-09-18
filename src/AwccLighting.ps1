@@ -6,12 +6,16 @@ $logPath=Join-Path $root 'last-run.log'
 $history=Join-Path $root 'history.log'
 $mutex=New-Object Threading.Mutex($false,'Local\AlienwareLightSwitch')
 $locked=$false
+$ownedPid=$null
+$ownedStart=$null
+$userTookOver=$false
+$inputAtLaunch=0
 $exe=Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'Alienware\Alienware Command Center\AWCC\AWCC.exe'
 function Log([string]$Message){
  $line=('{0:o} {1}' -f (Get-Date),$Message)
  $line | Add-Content -LiteralPath $logPath -Encoding UTF8
  $line | Add-Content -LiteralPath $history -Encoding UTF8
- Write-Output $line
+ [Console]::WriteLine($line)
 }
 function Get-AwccWindow {
  $processes=@(Get-Process AWCC -ErrorAction SilentlyContinue | Where-Object {$_.MainWindowHandle -ne 0 -and $_.Path -eq $exe})
@@ -19,9 +23,47 @@ function Get-AwccWindow {
  if($processes.Count -gt 1){throw 'Multiple AWCC windows found. Close duplicate windows and retry.'}
  return $null
 }
+function Protect-WindowOwnership($Window) {
+ if(-not $ownedPid -or -not $Window){return}
+ if($Window.Current.ProcessId -ne $ownedPid){return}
+ $handle=[IntPtr]$Window.Current.NativeWindowHandle
+ if([AwccWindowActivity]::GetForegroundWindow() -eq $handle -and [AwccWindowActivity]::LastInput() -ne $inputAtLaunch){
+  if(-not $script:userTookOver){Log 'AWCC_USER_TAKEOVER Keeping the window available.'}
+  $script:userTookOver=$true
+ }
+ if(-not $script:userTookOver){
+  $pattern=$null
+  if($Window.TryGetCurrentPattern([Windows.Automation.WindowPattern]::Pattern,[ref]$pattern) -and $pattern.Current.CanMinimize){
+   if($pattern.Current.WindowVisualState -ne [Windows.Automation.WindowVisualState]::Minimized){
+    $pattern.SetWindowVisualState([Windows.Automation.WindowVisualState]::Minimized)
+   }
+  }
+ }
+}
+function Finish-OwnedWindow {
+ if(-not $ownedPid){Log 'AWCC_EXISTING_WINDOW_PRESERVED';return}
+ $window=Get-AwccWindow
+ Protect-WindowOwnership $window
+ if($script:userTookOver){Log 'AWCC_CLOSE_SKIPPED User took over the window.';return}
+ $process=Get-Process -Id $ownedPid -ErrorAction SilentlyContinue
+ if(-not $process){Log 'AWCC_OWNED_PROCESS_ALREADY_EXITED';return}
+ if($process.Path -ne $exe -or $process.StartTime.Ticks -ne $ownedStart){Log 'AWCC_CLOSE_SKIPPED Ownership could not be confirmed.';return}
+ if(-not $window -or $window.Current.ProcessId -ne $ownedPid){Log 'AWCC_CLOSE_SKIPPED Window ownership changed.';return}
+ $visual=[Windows.Automation.WindowPattern]$window.GetCurrentPattern([Windows.Automation.WindowPattern]::Pattern)
+ if($visual.Current.WindowVisualState -eq [Windows.Automation.WindowVisualState]::Minimized){Log 'AWCC_OWNED_BACKGROUND_VERIFIED'}
+ if(-not $process.CloseMainWindow()){Log 'WINDOW_WARNING Could not request a normal AWCC close.';return}
+ $deadline=(Get-Date).AddSeconds(5)
+ do {
+  Start-Sleep -Milliseconds 100
+  $process.Refresh()
+  if($process.HasExited -or $process.MainWindowHandle -eq 0){Log 'AWCC_OWNED_WINDOW_CLOSED_VERIFIED';return}
+ } while((Get-Date) -lt $deadline)
+ Log 'WINDOW_WARNING AWCC did not close promptly. It was not forcibly terminated.'
+}
 function Find-Id([string]$Id) {
  $window=Get-AwccWindow
  if(-not $window){return $null}
+ Protect-WindowOwnership $window
  $condition=New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::AutomationIdProperty,$Id)
  $matches=$window.FindAll([Windows.Automation.TreeScope]::Descendants,$condition)
  if($matches.Count -gt 1){throw ('Ambiguous AWCC control: '+$Id)}
@@ -57,16 +99,29 @@ try {
  '' | Set-Content -LiteralPath $logPath -Encoding UTF8
  Log ('START requested='+$Mode+' PID='+$PID)
  if(-not (Test-Path -LiteralPath $exe)){throw 'Alienware Command Center is not installed at the expected location.'}
- if(-not (Get-AwccWindow)){Start-Process -FilePath $exe | Out-Null}
- # Restore a previously minimized AWCC window so its controls are available.
- $existingWindow=Get-AwccWindow
- if($existingWindow){
-  $windowPattern=$null
-  if($existingWindow.TryGetCurrentPattern([Windows.Automation.WindowPattern]::Pattern,[ref]$windowPattern)){
-   if($windowPattern.Current.WindowVisualState -eq [Windows.Automation.WindowVisualState]::Minimized){
-    $windowPattern.SetWindowVisualState([Windows.Automation.WindowVisualState]::Normal)
-   }
-  }
+ Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+public static class AwccWindowActivity {
+ [StructLayout(LayoutKind.Sequential)] struct InputInfo { public uint Size; public uint Time; }
+ [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+ [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref InputInfo info);
+ public static uint LastInput(){var info=new InputInfo();info.Size=(uint)Marshal.SizeOf(info);return GetLastInputInfo(ref info)?info.Time:0;}
+}
+"@
+ $alreadyRunning=@(Get-Process AWCC -ErrorAction SilentlyContinue | Where-Object Path -eq $exe)
+ if($alreadyRunning.Count -eq 0){
+  $inputAtLaunch=[AwccWindowActivity]::LastInput()
+  $launched=Start-Process -FilePath $exe -WindowStyle Minimized -RedirectStandardOutput (Join-Path $root 'awcc-stdout.log') -RedirectStandardError (Join-Path $root 'awcc-stderr.log') -PassThru
+  $ownedPid=$launched.Id
+  $ownedStart=$launched.StartTime.Ticks
+  Log ('AWCC_OWNED_LAUNCH pid='+$ownedPid)
+ } elseif(-not (Get-AwccWindow)){
+  # Do not claim an existing background instance as our own.
+  Start-Process -FilePath $exe -WindowStyle Minimized -RedirectStandardOutput (Join-Path $root 'awcc-stdout.log') -RedirectStandardError (Join-Path $root 'awcc-stderr.log') | Out-Null
+  Log 'AWCC_EXISTING_PROCESS Reusing without ownership.'
+ } else {
+  Log 'AWCC_EXISTING_WINDOW Reusing without restoring, minimizing, or closing.'
  }
  $library=Wait-Id 'GAME' 60
  if(-not (Find-Id 'GameLibrary_SystemDefaultView_TextBlock_TextBlock14')) {
@@ -97,23 +152,7 @@ try {
  Start-Sleep -Milliseconds 800
  if((Read-Lighting) -ne $Mode){throw 'AWCC lighting selection reverted.'}
  Log ('AWCC_SELECTION_VERIFIED before='+$before+' after='+$after)
- # Minimize only after confirming the lighting state. Keep errors visible.
- try {
-  $awccWindow=Get-AwccWindow
-  if(-not $awccWindow){throw 'AWCC window is no longer available.'}
-  $windowPattern=[Windows.Automation.WindowPattern]$awccWindow.GetCurrentPattern([Windows.Automation.WindowPattern]::Pattern)
-  if(-not $windowPattern.Current.CanMinimize){throw 'AWCC does not expose minimize support.'}
-  $windowPattern.SetWindowVisualState([Windows.Automation.WindowVisualState]::Minimized)
-  $minimizeDeadline=(Get-Date).AddSeconds(3)
-  do {
-   Start-Sleep -Milliseconds 100
-   $minimized=$windowPattern.Current.WindowVisualState -eq [Windows.Automation.WindowVisualState]::Minimized
-  } while(-not $minimized -and (Get-Date) -lt $minimizeDeadline)
-  if(-not $minimized){throw 'AWCC did not report a minimized window.'}
-  Log 'AWCC_MINIMIZED_VERIFIED'
- } catch {
-  Log ('WINDOW_WARNING Lighting changed, but AWCC could not be minimized: '+$_.Exception.Message)
- }
+ Finish-OwnedWindow
 } catch {
  Log ('FAILED '+($_ | Out-String))
  if(-not $Quiet){
