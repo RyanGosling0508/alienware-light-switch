@@ -1,4 +1,4 @@
-# Alienware Light Switch
+﻿# Alienware Light Switch
 
 A small, portable Windows app for turning Alienware lighting on or off through **Alienware Command Center (AWCC)**.
 
@@ -10,7 +10,7 @@ Download **AlienwareLightSwitch.exe** from the [latest release](https://github.c
 
 1. Open the executable.
 2. Choose **Lights on** or **Lights off**.
-3. Wait for the status message. AWCC may open and take a little time to load.
+3. Wait for the status message. AWCC may briefly open and take time to load; after a successful lighting change it is automatically minimized. If the lighting change fails, the app leaves AWCC available for troubleshooting.
 
 **Lights on** selects AWCC's **Go Light**, restoring your configured effects. **Lights off** selects **Go Dark**. The app does not change your fan profile or Windows power plan. Avoid interacting with AWCC while an operation is in progress.
 
@@ -35,7 +35,7 @@ The executable embeds a small PowerShell script as an assembly resource. It runs
 
 `AWCC > Library > System Default > Go Light / Go Dark`
 
-It reads back the selected AWCC radio button before reporting completion. There are no external script files to copy, and no direct USB writes, firmware edits, driver installation, or attempts to stop Dell services. The helper exits after each operation.
+It reads back the selected AWCC radio button before reporting completion. There are no external script files to copy, and no direct USB writes, firmware edits, driver installation, or attempts to stop Dell services. The helper exits after each operation. AWCC remains running but is minimized after success; it is restored as needed for the next change. This does not eliminate AWCC or guarantee that its window will never appear briefly.
 
 An AWCC selection readback is **software confirmation**, not optical proof that every physical LED changed. Physical keyboard and chassis behavior has been confirmed on the tested machine; other configurations need their own verification.
 

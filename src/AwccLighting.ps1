@@ -58,6 +58,16 @@ try {
  Log ('START requested='+$Mode+' PID='+$PID)
  if(-not (Test-Path -LiteralPath $exe)){throw 'Alienware Command Center is not installed at the expected location.'}
  if(-not (Get-AwccWindow)){Start-Process -FilePath $exe | Out-Null}
+ # Restore a previously minimized AWCC window so its controls are available.
+ $existingWindow=Get-AwccWindow
+ if($existingWindow){
+  $windowPattern=$null
+  if($existingWindow.TryGetCurrentPattern([Windows.Automation.WindowPattern]::Pattern,[ref]$windowPattern)){
+   if($windowPattern.Current.WindowVisualState -eq [Windows.Automation.WindowVisualState]::Minimized){
+    $windowPattern.SetWindowVisualState([Windows.Automation.WindowVisualState]::Normal)
+   }
+  }
+ }
  $library=Wait-Id 'GAME' 60
  if(-not (Find-Id 'GameLibrary_SystemDefaultView_TextBlock_TextBlock14')) {
  Select-Control (Wait-Id 'DASHBOARD')
@@ -87,6 +97,23 @@ try {
  Start-Sleep -Milliseconds 800
  if((Read-Lighting) -ne $Mode){throw 'AWCC lighting selection reverted.'}
  Log ('AWCC_SELECTION_VERIFIED before='+$before+' after='+$after)
+ # Minimize only after confirming the lighting state. Keep errors visible.
+ try {
+  $awccWindow=Get-AwccWindow
+  if(-not $awccWindow){throw 'AWCC window is no longer available.'}
+  $windowPattern=[Windows.Automation.WindowPattern]$awccWindow.GetCurrentPattern([Windows.Automation.WindowPattern]::Pattern)
+  if(-not $windowPattern.Current.CanMinimize){throw 'AWCC does not expose minimize support.'}
+  $windowPattern.SetWindowVisualState([Windows.Automation.WindowVisualState]::Minimized)
+  $minimizeDeadline=(Get-Date).AddSeconds(3)
+  do {
+   Start-Sleep -Milliseconds 100
+   $minimized=$windowPattern.Current.WindowVisualState -eq [Windows.Automation.WindowVisualState]::Minimized
+  } while(-not $minimized -and (Get-Date) -lt $minimizeDeadline)
+  if(-not $minimized){throw 'AWCC did not report a minimized window.'}
+  Log 'AWCC_MINIMIZED_VERIFIED'
+ } catch {
+  Log ('WINDOW_WARNING Lighting changed, but AWCC could not be minimized: '+$_.Exception.Message)
+ }
 } catch {
  Log ('FAILED '+($_ | Out-String))
  if(-not $Quiet){
