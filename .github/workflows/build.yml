@@ -1,0 +1,27 @@
+name: Build Windows app
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build executable
+        shell: powershell
+        run: ./build.ps1
+      - name: Check embedded backend syntax
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$pwd/src/AwccLighting.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count) { throw ($errors | Out-String) }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AlienwareLightSwitch-windows-x64
+          path: dist/AlienwareLightSwitch.exe
