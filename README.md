@@ -75,6 +75,8 @@ They exit with 0 only after the expected AWCC selection is read back. GUI applic
 
 ## Troubleshooting
 
+Version 1.0.3 reduces false user-takeover detection during AWCC startup. Input tracking starts when the owned window appears, and takeover detection also checks whether the pointer targets AWCC or a keyboard key is held. This remains best-effort: avoid using AWCC during a lighting change.
+
 - Open AWCC manually and check that **Go Light** and **Go Dark** work.
 - Complete any AWCC update or onboarding prompts before trying again.
 - Use **View details** if the app cannot locate the expected controls.

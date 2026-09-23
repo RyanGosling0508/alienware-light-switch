@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -10,8 +10,8 @@ using System.Threading;
 using System.Windows.Forms;
 [assembly: AssemblyTitle("Alienware Light Switch")]
 [assembly: AssemblyDescription("A small companion for AWCC lighting")]
-[assembly: AssemblyVersion("1.0.2.0")]
-[assembly: AssemblyFileVersion("1.0.2.0")]
+[assembly: AssemblyVersion("1.0.3.0")]
+[assembly: AssemblyFileVersion("1.0.3.0")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 RyanGosling0508")]
 namespace LightSwitch {
  static class Palette {
@@ -89,7 +89,7 @@ namespace LightSwitch {
    using(var b=new SolidBrush(dot))g.FillEllipse(b,34,400,7,7);
    Draw(g,status,new Font("Segoe UI",12,FontStyle.Regular,GraphicsUnit.Pixel),Palette.Text,51,393);
    Draw(g,"LOCAL CONTROL  /  NO BACKGROUND SERVICE",new Font("Segoe UI",11,FontStyle.Regular,GraphicsUnit.Pixel),Palette.Muted,32,454);
-   Draw(g,"v1.0.2",new Font("Segoe UI",11,FontStyle.Regular,GraphicsUnit.Pixel),Palette.Muted,578,454);
+   Draw(g,"v1.0.3",new Font("Segoe UI",11,FontStyle.Regular,GraphicsUnit.Pixel),Palette.Muted,578,454);
   }
   static void Draw(Graphics g,string text,Font f,Color color,float x,float y){using(f)using(var b=new SolidBrush(color))g.DrawString(text,f,b,x,y);}
   void Apply(string mode){

@@ -10,6 +10,7 @@ $ownedPid=$null
 $ownedStart=$null
 $userTookOver=$false
 $inputAtLaunch=0
+$ownedWindowSeen=$false
 $exe=Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'Alienware\Alienware Command Center\AWCC\AWCC.exe'
 function Log([string]$Message){
  $line=('{0:o} {1}' -f (Get-Date),$Message)
@@ -27,7 +28,14 @@ function Protect-WindowOwnership($Window) {
  if(-not $ownedPid -or -not $Window){return}
  if($Window.Current.ProcessId -ne $ownedPid){return}
  $handle=[IntPtr]$Window.Current.NativeWindowHandle
- if([AwccWindowActivity]::GetForegroundWindow() -eq $handle -and [AwccWindowActivity]::LastInput() -ne $inputAtLaunch){
+ if(-not $script:ownedWindowSeen){
+  # Startup can activate the window after the click that launched this tool.
+  # Begin tracking user takeover only once this window has actually appeared.
+  $script:inputAtLaunch=[AwccWindowActivity]::LastInput()
+  $script:ownedWindowSeen=$true
+  Log 'AWCC_OWNED_WINDOW_OBSERVED Input baseline initialized.'
+ }
+ if([AwccWindowActivity]::GetForegroundWindow() -eq $handle -and [AwccWindowActivity]::LastInput() -ne $inputAtLaunch -and [AwccWindowActivity]::InputTargetsWindow($handle)){
   if(-not $script:userTookOver){Log 'AWCC_USER_TAKEOVER Keeping the window available.'}
   $script:userTookOver=$true
  }
@@ -38,6 +46,7 @@ function Protect-WindowOwnership($Window) {
     $pattern.SetWindowVisualState([Windows.Automation.WindowVisualState]::Minimized)
    }
   }
+  $script:inputAtLaunch=[AwccWindowActivity]::LastInput()
  }
 }
 function Finish-OwnedWindow {
@@ -106,6 +115,17 @@ public static class AwccWindowActivity {
  [StructLayout(LayoutKind.Sequential)] struct InputInfo { public uint Size; public uint Time; }
  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
  [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref InputInfo info);
+ [StructLayout(LayoutKind.Sequential)] struct Point { public int X; public int Y; }
+ [DllImport("user32.dll")] static extern bool GetCursorPos(out Point point);
+ [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(Point point);
+ [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr window, uint flags);
+ [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
+ public static bool InputTargetsWindow(IntPtr window){
+  Point point;
+  if(GetCursorPos(out point) && GetAncestor(WindowFromPoint(point),2)==window)return true;
+  for(int key=8;key<255;key++)if((GetAsyncKeyState(key)&0x8000)!=0)return true;
+  return false;
+ }
  public static uint LastInput(){var info=new InputInfo();info.Size=(uint)Marshal.SizeOf(info);return GetLastInputInfo(ref info)?info.Time:0;}
 }
 "@
